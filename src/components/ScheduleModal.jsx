@@ -1,3 +1,4 @@
+// /src/components/ScheduleModal.jsx
 import { useState } from "react";
 import { Icon } from "../lib/icons";
 import { ROLES } from "../data/constants";
@@ -26,19 +27,41 @@ export default function ScheduleModal({ locations, users, inspections, onClose, 
     const loc = locations.find(l => l.id === Number(locId));
     const insp = users.find(u => u.id === Number(inspectorId));
     
-    const template = getTemplate(loc.name);
-    const templateSections = template.sections;
+    // CORRIGIDO: Usar getTemplate diretamente
+    const template = getTemplate(loc?.name || "");
+    const templateSections = template.sections || [];
 
     const baseTask = {
       id: Date.now(),
-      location_id: loc.id, location_name: loc.name,
-      inspector_id: insp.id, inspector_name: insp.name,
-      supervisor_id: 3, supervisor_name: "Ana Sitoe",
-      status: "pending_acceptance", accepted: null, 
-      date, start_time: time, type: "inspection",
-      items: templateSections.flatMap(s => s.items.map(item => ({ ...item, section_id: s.id, score: null, comment: "", photos: [] }))),
-      sections: templateSections.map(s => ({ id: s.id, observation: "", photos: [] })),
-      notes: "", alert_level: "ok", score_pct: null, priority: "normal"
+      location_id: loc?.id, 
+      location_name: loc?.name || "",
+      inspector_id: insp?.id, 
+      inspector_name: insp?.name,
+      supervisor_id: 3, 
+      supervisor_name: "Ana Sitoe",
+      status: "pending_acceptance", 
+      accepted: null, 
+      date, 
+      start_time: time, 
+      type: "inspection",
+      items: templateSections.flatMap(s => 
+        (s.items || []).map(item => ({ 
+          ...item, 
+          section_id: s.id, 
+          score: null, 
+          comment: "", 
+          photos: [] 
+        }))
+      ),
+      sections: templateSections.map(s => ({ 
+        id: s.id, 
+        observation: "", 
+        photos: [] 
+      })),
+      notes: "", 
+      alert_level: "ok", 
+      score_pct: null, 
+      priority: "normal"
     };
 
     let tasksToCreate = [baseTask];
