@@ -28,7 +28,7 @@ export const PRIORITY_LEVELS = {
   low: { label: "Low", color: "#888888" }
 };
 
-// Lista de localizações - todas usando a função que busca do localStorage
+// Lista de localizações - SEM a função getTemplate
 export const SEED_LOCATIONS = [
   { id: 1, name: "Baker Hughes", address: "Maputo, Moçambique", supervisor_id: 3 },
   { id: 2, name: "Bayport", address: "Maputo, Moçambique", supervisor_id: 3 },
@@ -83,31 +83,33 @@ export const SEED_LOCATIONS = [
   { id: 51, name: "Hollard Seguros R/C GA 4º Andar", address: "Maputo, Moçambique", supervisor_id: 3 }
 ];
 
-// Função para obter os templates - primeiro tenta do localStorage, depois fallback para estático
+// Função para obter o template - com fallback seguro
 export function getClientTemplate(clientName) {
-  // Primeiro tenta buscar do localStorage (templates importados do Excel)
-  const template = getTemplateByClientName(clientName);
-  
-  // Se encontrou no localStorage, retorna
-  if (template && template.sections && template.sections.length > 0) {
-    return template;
-  }
-  
-  // Fallback: tenta do clientTemplates.js estático
   try {
-    const { getTemplate } = require('./clientTemplates');
-    const staticTemplate = getTemplate(clientName);
-    if (staticTemplate && staticTemplate.sections && staticTemplate.sections.length > 0) {
-      return staticTemplate;
+    // Verificar se está no navegador
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+      return getDefaultTemplate();
+    }
+    
+    // Primeiro tenta buscar do localStorage (templates importados do Excel)
+    const template = getTemplateByClientName(clientName);
+    
+    // Se encontrou no localStorage e tem seções, retorna
+    if (template && template.sections && template.sections.length > 0) {
+      return template;
     }
   } catch (e) {
-    console.warn('Fallback template not found:', e);
+    console.warn('Erro ao buscar template do localStorage:', e);
   }
   
-  // Template padrão de emergência
+  // Fallback: template padrão
+  return getDefaultTemplate();
+}
+
+function getDefaultTemplate() {
   return {
     clientId: 'DEFAULT',
-    clientName: clientName || 'Template Padrão',
+    clientName: 'Template Padrão',
     sections: [
       {
         id: 'default_section',
@@ -119,11 +121,12 @@ export function getClientTemplate(clientName) {
         ]
       }
     ],
-    totalItems: 3
+    totalItems: 3,
+    version: '1.0'
   };
 }
 
-// Para compatibilidade com código existente que usa TEMPLATE_SECTIONS
-const defaultTemplate = getClientTemplate('Baker Hughes');
+// Para compatibilidade com código existente
+const defaultTemplate = getDefaultTemplate();
 export const TEMPLATE_SECTIONS = defaultTemplate.sections || [];
 export const TOTAL_POSSIBLE = TEMPLATE_SECTIONS.reduce((sum, s) => sum + (s.items ? s.items.reduce((ss, i) => ss + (i.weight || i.max || 1), 0) : 0), 0);
