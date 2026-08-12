@@ -1,3 +1,4 @@
+// /src/lib/helpers.js
 import { SEED_LOCATIONS } from "../data/constants";
 import { getTemplate } from "../data/clientTemplates";
 
@@ -61,7 +62,7 @@ export function generateAISummary(items, locationName) {
   } else {
     summary += `${lowScores.length} critical issue(s) were identified requiring immediate attention. `;
     lowScores.forEach(item => {
-      recommendations.push(`- **${item.text}**: Scored ${item.score}/5. ${item.comment || "No observation provided."} Corrective action required within 48 hours.`);
+      recommendations.push(`- **${item.text || item.label}**: Scored ${item.score}/5. ${item.comment || "No observation provided."} Corrective action required within 48 hours.`);
     });
   }
   return { summary, recommendations };
@@ -82,57 +83,116 @@ export function genSeedInspections() {
     const loc = locations[Math.floor(Math.random() * locations.length)];
     const insp = inspectors[Math.floor(Math.random() * inspectors.length)];
     const daysAgo = Math.floor(Math.random() * 180);
-    const date = new Date(); date.setDate(date.getDate() - daysAgo);
+    const date = new Date(); 
+    date.setDate(date.getDate() - daysAgo);
     
-    const template = loc.getTemplate ? loc.getTemplate() : getTemplate(loc.name);
-    const templateSections = template.sections;
+    // CORRIGIDO: Usar getTemplate diretamente em vez de loc.getTemplate
+    const template = getTemplate(loc.name);
+    const templateSections = template.sections || [];
     
-    const items = templateSections.flatMap(s => s.items.map(item => ({
-      ...item, section_id: s.id,
-      score: Math.floor(Math.random() * 3) + 3, 
-      comment: "Tudo conforme os padrões exigidos.", photos: []
-    })));
-    const sections = templateSections.map(s => ({ id: s.id, observation: "Operação padrão executada.", photos: [] }));
+    const items = templateSections.flatMap(s => 
+      (s.items || []).map(item => ({
+        ...item, 
+        section_id: s.id,
+        score: Math.floor(Math.random() * 3) + 3, 
+        comment: "Tudo conforme os padrões exigidos.", 
+        photos: []
+      }))
+    );
+    const sections = templateSections.map(s => ({ 
+      id: s.id, 
+      observation: "Operação padrão executada.", 
+      photos: [] 
+    }));
     
     const pct = calcScore(items);
     
     inspections.push({
       id: genId() + i,
-      location_id: loc.id, location_name: loc.name,
-      inspector_id: insp.id, inspector_name: insp.name,
-      supervisor_id: 3, supervisor_name: "Ana Sitoe",
+      location_id: loc.id, 
+      location_name: loc.name,
+      inspector_id: insp.id, 
+      inspector_name: insp.name,
+      supervisor_id: 3, 
+      supervisor_name: "Ana Sitoe",
       status: statuses[i % statuses.length],
       score_pct: pct,
       date: date.toISOString().split("T")[0],
-      items, sections,
+      items, 
+      sections,
       notes: "Inspeção de rotina realizada sem problemas.",
       alert_level: pct < 60 ? "critical" : pct < 75 ? "warning" : "ok",
-      type: "inspection", accepted: true
+      type: "inspection", 
+      accepted: true
     });
   }
 
+  // CORRIGIDO: Usar getTemplate diretamente
   const pendingLoc = locations.find(l => l.name === "Baker Hughes");
-  const pendingTemplate = pendingLoc.getTemplate();
+  const pendingTemplate = getTemplate(pendingLoc?.name || "Baker Hughes");
   const pending = {
-    id: "pending-1", location_id: 1, location_name: "Baker Hughes",
-    inspector_id: 4, inspector_name: "João Tembe",
-    supervisor_id: 3, supervisor_name: "Ana Sitoe",
-    status: "pending", score_pct: null, date: new Date().toISOString().split("T")[0],
-    items: pendingTemplate.sections.flatMap(s => s.items.map(item => ({ ...item, section_id: s.id, score: null, comment: "", photos: [] }))),
-    sections: pendingTemplate.sections.map(s => ({ id: s.id, observation: "", photos: [] })),
-    notes: "", alert_level: "ok", type: "inspection", accepted: true
+    id: "pending-1", 
+    location_id: 1, 
+    location_name: "Baker Hughes",
+    inspector_id: 4, 
+    inspector_name: "João Tembe",
+    supervisor_id: 3, 
+    supervisor_name: "Ana Sitoe",
+    status: "pending", 
+    score_pct: null, 
+    date: new Date().toISOString().split("T")[0],
+    items: (pendingTemplate.sections || []).flatMap(s => 
+      (s.items || []).map(item => ({ 
+        ...item, 
+        section_id: s.id, 
+        score: null, 
+        comment: "", 
+        photos: [] 
+      }))
+    ),
+    sections: (pendingTemplate.sections || []).map(s => ({ 
+      id: s.id, 
+      observation: "", 
+      photos: [] 
+    })),
+    notes: "", 
+    alert_level: "ok", 
+    type: "inspection", 
+    accepted: true
   };
   
+  // CORRIGIDO: Usar getTemplate diretamente
   const inprogLoc = locations.find(l => l.name === "FCDO");
-  const inprogTemplate = inprogLoc.getTemplate();
+  const inprogTemplate = getTemplate(inprogLoc?.name || "FCDO");
   const inprog = {
-    id: "inprog-1", location_id: 14, location_name: "FCDO",
-    inspector_id: 5, inspector_name: "Maria Nhantumbo",
-    supervisor_id: 3, supervisor_name: "Ana Sitoe",
-    status: "in_progress", score_pct: null, date: new Date().toISOString().split("T")[0],
-    items: inprogTemplate.sections.flatMap(s => s.items.map(item => ({ ...item, section_id: s.id, score: null, comment: "", photos: [] }))),
-    sections: inprogTemplate.sections.map(s => ({ id: s.id, observation: "", photos: [] })),
-    notes: "", alert_level: "ok", type: "inspection", accepted: true
+    id: "inprog-1", 
+    location_id: 14, 
+    location_name: "FCDO",
+    inspector_id: 5, 
+    inspector_name: "Maria Nhantumbo",
+    supervisor_id: 3, 
+    supervisor_name: "Ana Sitoe",
+    status: "in_progress", 
+    score_pct: null, 
+    date: new Date().toISOString().split("T")[0],
+    items: (inprogTemplate.sections || []).flatMap(s => 
+      (s.items || []).map(item => ({ 
+        ...item, 
+        section_id: s.id, 
+        score: null, 
+        comment: "", 
+        photos: [] 
+      }))
+    ),
+    sections: (inprogTemplate.sections || []).map(s => ({ 
+      id: s.id, 
+      observation: "", 
+      photos: [] 
+    })),
+    notes: "", 
+    alert_level: "ok", 
+    type: "inspection", 
+    accepted: true
   };
   
   return [pending, inprog, ...inspections];
@@ -148,7 +208,7 @@ export function getMonthlyTrend(inspections) {
     months.push({ key: d.toISOString().substring(0, 7), label: d.toLocaleDateString("pt-PT", { month: "short" }) });
   }
   return months.map(m => {
-    const monthInsps = inspections.filter(i => i.date.startsWith(m.key) && i.score_pct !== null);
+    const monthInsps = inspections.filter(i => i.date && i.date.startsWith(m.key) && i.score_pct !== null);
     const avg = monthInsps.length ? Math.round(monthInsps.reduce((s, i) => s + i.score_pct, 0) / monthInsps.length) : 0;
     const alerts = monthInsps.filter(i => i.alert_level === "critical").length;
     return { name: m.label, Score: avg, Alertas: alerts };
