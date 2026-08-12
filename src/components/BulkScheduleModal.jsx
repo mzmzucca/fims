@@ -1,3 +1,4 @@
+// /src/components/BulkScheduleModal.jsx
 import { useState } from "react";
 import { Icon } from "../lib/icons";
 import { ROLES } from "../data/constants";
@@ -19,19 +20,42 @@ export default function BulkScheduleModal({ locations, users, onClose, onCreate 
     const tasks = selectedLocs.map(locId => {
       const loc = locations.find(l => l.id === locId);
       const insp = users.find(u => u.id === Number(inspectorId));
-      const template = getTemplate(loc.name);
+      
+      // CORRIGIDO: Usar getTemplate diretamente com segurança
+      const template = getTemplate(loc?.name || "");
+      const templateSections = template.sections || [];
       
       return {
         id: Date.now() + Math.random(),
-        location_id: loc.id, location_name: loc.name,
+        location_id: loc?.id, 
+        location_name: loc?.name || "",
         inspector_id: insp ? insp.id : null,
         inspector_name: insp ? insp.name : null,
-        supervisor_id: 3, supervisor_name: "Ana Sitoe",
+        supervisor_id: 3, 
+        supervisor_name: "Ana Sitoe",
         status: insp ? "pending_acceptance" : "unassigned",
-        accepted: null, date, start_time: time, type: "inspection",
-        items: template.sections.flatMap(s => s.items.map(item => ({ ...item, section_id: s.id, score: null, comment: "", photos: [] }))),
-        sections: template.sections.map(s => ({ id: s.id, observation: "", photos: [] })),
-        notes: "", alert_level: "ok", score_pct: null, priority: "normal"
+        accepted: null, 
+        date, 
+        start_time: time, 
+        type: "inspection",
+        items: templateSections.flatMap(s => 
+          (s.items || []).map(item => ({ 
+            ...item, 
+            section_id: s.id, 
+            score: null, 
+            comment: "", 
+            photos: [] 
+          }))
+        ),
+        sections: templateSections.map(s => ({ 
+          id: s.id, 
+          observation: "", 
+          photos: [] 
+        })),
+        notes: "", 
+        alert_level: "ok", 
+        score_pct: null, 
+        priority: "normal"
       };
     });
 
