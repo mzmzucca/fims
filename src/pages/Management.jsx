@@ -6,6 +6,7 @@ import { ROLES, TEMPLATE_SECTIONS } from "../data/constants";
 import { scoreLabel } from "../lib/helpers";
 import { TemplateImporter } from "./Management/TemplateImporter";
 import { loadTemplatesFromStorage, getTemplateByClientName } from "../utils/excelTemplateImporter";
+import SyncButton from "../components/SyncButton";
 
 export function UsersPage({ users, setUsers }) {
   const [showModal, setShowModal] = useState(false);
@@ -131,7 +132,7 @@ export function ReportsPage({ inspections, locations }) {
 }
 
 // ============================================================
-// TEMPLATES PAGE - COMPLETO COM IMPORTAÇÃO DO EXCEL
+// TEMPLATES PAGE - COMPLETO COM IMPORTAÇÃO DO EXCEL E SUPABASE
 // ============================================================
 export function TemplatesPage() {
   const [showImporter, setShowImporter] = useState(false);
@@ -148,7 +149,6 @@ export function TemplatesPage() {
     const { clients } = loadTemplatesFromStorage();
     setTemplates(clients);
     
-    // Calcular estatísticas
     const { templates: allTemplates } = loadTemplatesFromStorage();
     const totalItems = Object.values(allTemplates).reduce((sum, t) => sum + (t.totalItems || 0), 0);
     const totalSections = Object.values(allTemplates).reduce((sum, t) => sum + (t.sections || []).length, 0);
@@ -186,7 +186,6 @@ export function TemplatesPage() {
     delete allTemplates[clientId];
     localStorage.setItem('fims_templates', JSON.stringify(allTemplates));
     
-    // Atualizar lista de clientes
     const clients = Object.keys(allTemplates).map(key => ({
       id: allTemplates[key].clientId,
       name: allTemplates[key].clientName,
@@ -213,6 +212,7 @@ export function TemplatesPage() {
           </div>
         </div>
         <div className="header-actions">
+          <SyncButton />
           <input
             type="text"
             placeholder="Buscar cliente..."
@@ -234,7 +234,6 @@ export function TemplatesPage() {
         <TemplateImporter onImportComplete={handleImportComplete} />
       )}
 
-      {/* Modal de detalhes do template */}
       {selectedTemplate && (
         <div className="modal-overlay" onClick={handleCloseTemplate}>
           <div className="modal template-detail-modal" onClick={e => e.stopPropagation()}>
@@ -314,7 +313,6 @@ export function TemplatesPage() {
         </div>
       )}
 
-      {/* Grid de templates */}
       <div className="templates-grid">
         {filteredTemplates.map(template => (
           <div key={template.id} className="template-card">
@@ -656,13 +654,12 @@ export function AuditPage({ auditLogs }) {
 // ============================================================
 export function SettingsPage() {
   const fileInputRef = useRef(null);
-  const [backupSize, setBackupSize] = useState(null);
 
   const getStorageSize = () => {
     let total = 0;
     for (let key in localStorage) {
       if (localStorage.hasOwnProperty(key)) {
-        total += localStorage[key].length * 2; // UTF-16
+        total += localStorage[key].length * 2;
       }
     }
     return total;
@@ -710,7 +707,6 @@ export function SettingsPage() {
       try {
         const data = JSON.parse(event.target.result);
         
-        // Restaurar todos os dados
         Object.keys(data).forEach(key => {
           if (key !== "exportDate" && key !== "version" && data[key] !== null && data[key] !== undefined) {
             localStorage.setItem(key, JSON.stringify(data[key]));
@@ -810,8 +806,8 @@ export function SettingsPage() {
           {[
             ["Versão", "FIMS v1.0.0"],
             ["Ambiente", "Produção (Frontend)"],
-            ["Base de Dados", "LocalStorage"],
-            ["Stack", "React + Vite"],
+            ["Base de Dados", "LocalStorage + Supabase"],
+            ["Stack", "React + Vite + Supabase"],
             ["Templates", JSON.parse(localStorage.getItem("fims_template_clients") || "[]").length + " clientes"]
           ].map(([k, v]) => (
             <div key={k} style={{ background: "#F8F7F4", borderRadius: 8, padding: "10px 14px" }}>
