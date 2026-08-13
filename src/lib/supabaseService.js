@@ -2,7 +2,7 @@
 import { supabase, PHOTOS_BUCKET, ensureBucket } from './supabaseClient';
 
 // ============================================================
-// SERVIÇO DE TEMPLATES
+// SERVIÇO DE TEMPLATES - CORRIGIDO
 // ============================================================
 
 // Salvar templates no Supabase
@@ -23,15 +23,19 @@ export const saveTemplatesToSupabase = async (templates) => {
       return { success: true, data: [] };
     }
 
+    // Usar upsert com ON CONFLICT (client_id)
     const { data, error } = await supabase
       .from('templates')
       .upsert(templateList, { 
-        onConflict: 'client_id',
-        ignoreDuplicates: false 
+        onConflict: 'client_id'
       })
       .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Erro Supabase:', error);
+      throw error;
+    }
+    
     return { success: true, data };
   } catch (error) {
     console.error('Erro ao salvar templates:', error);
@@ -105,21 +109,88 @@ export const getTemplateFromSupabase = async (clientName) => {
 };
 
 // ============================================================
+// SERVIÇO DE USUÁRIOS
+// ============================================================
+
+// Listar todos os usuários
+export const listUsers = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('name');
+    
+    if (error) throw error;
+    return { success: true, users: data };
+  } catch (error) {
+    console.error('Erro ao listar usuários:', error);
+    return { success: false, error: error.message, users: [] };
+  }
+};
+
+// Buscar usuário por ID
+export const getUserById = async (userId) => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    
+    if (error) throw error;
+    return { success: true, user: data };
+  } catch (error) {
+    console.error('Erro ao buscar usuário:', error);
+    return { success: false, error: error.message, user: null };
+  }
+};
+
+// Atualizar usuário
+export const updateUser = async (userId, updates) => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('id', userId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return { success: true, user: data };
+  } catch (error) {
+    console.error('Erro ao atualizar usuário:', error);
+    return { success: false, error: error.message, user: null };
+  }
+};
+
+// Resetar senha
+export const resetPassword = async (email) => {
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/reset-password'
+    });
+    
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Erro ao resetar senha:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// ============================================================
 // SERVIÇO DE FOTOS
 // ============================================================
 
 // Upload de foto para o Supabase Storage
 export const uploadPhoto = async (inspectionId, itemId, file) => {
   try {
-    // Garantir que o bucket existe
     await ensureBucket();
     
-    // Gerar nome único para o arquivo
     const fileExt = file.name.split('.').pop();
     const fileName = `${inspectionId}/${itemId}/${Date.now()}_${Math.random().toString(36).substring(2, 10)}.${fileExt}`;
     const filePath = `photos/${fileName}`;
 
-    // Upload para o Storage
     const { error: uploadError } = await supabase.storage
       .from(PHOTOS_BUCKET)
       .upload(filePath, file, {
@@ -130,12 +201,10 @@ export const uploadPhoto = async (inspectionId, itemId, file) => {
 
     if (uploadError) throw uploadError;
 
-    // Obter URL pública
     const { data: urlData } = supabase.storage
       .from(PHOTOS_BUCKET)
       .getPublicUrl(filePath);
 
-    // Salvar metadados na tabela photos
     const { data: photoData, error: dbError } = await supabase
       .from('photos')
       .insert({
@@ -199,14 +268,12 @@ export const getPhotosByInspection = async (inspectionId) => {
 // Deletar foto
 export const deletePhoto = async (photoId, storagePath) => {
   try {
-    // Deletar do Storage
     const { error: storageError } = await supabase.storage
       .from(PHOTOS_BUCKET)
       .remove([storagePath]);
 
     if (storageError) throw storageError;
 
-    // Deletar da tabela photos
     const { error: dbError } = await supabase
       .from('photos')
       .delete()
@@ -224,7 +291,6 @@ export const deletePhoto = async (photoId, storagePath) => {
 // Deletar todas as fotos de uma inspeção
 export const deletePhotosByInspection = async (inspectionId) => {
   try {
-    // Buscar todas as fotos da inspeção
     const { data: photos, error: fetchError } = await supabase
       .from('photos')
       .select('id, storage_path')
@@ -233,7 +299,6 @@ export const deletePhotosByInspection = async (inspectionId) => {
     if (fetchError) throw fetchError;
 
     if (photos && photos.length > 0) {
-      // Deletar do Storage
       const paths = photos.map(p => p.storage_path);
       const { error: storageError } = await supabase.storage
         .from(PHOTOS_BUCKET)
@@ -241,7 +306,6 @@ export const deletePhotosByInspection = async (inspectionId) => {
 
       if (storageError) throw storageError;
 
-      // Deletar da tabela
       const { error: dbError } = await supabase
         .from('photos')
         .delete()
@@ -354,6 +418,66 @@ export const countUnreadNotifications = async (userId) => {
 };
 
 // ============================================================
+// SERVIÇO DE MENSAGENS
+// ============================================================
+
+// Enviar mensagem
+export const sendMessage = async (senderId, receiverId, message) => {
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        sender_id: senderId,
+        receiver_id: receiverId,
+        message: message,
+        read: false
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return { success: true, message: data };
+  } catch (error) {
+    console.error('Erro ao enviar mensagem:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Buscar mensagens entre dois usuários
+export const getMessages = async (userId1, userId2) => {
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .or(`sender_id.eq.${userId1},receiver_id.eq.${userId1}`)
+      .or(`sender_id.eq.${userId2},receiver_id.eq.${userId2}`)
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    return { success: true, messages: data };
+  } catch (error) {
+    console.error('Erro ao buscar mensagens:', error);
+    return { success: false, error: error.message, messages: [] };
+  }
+};
+
+// Marcar mensagem como lida
+export const markMessageAsRead = async (messageId) => {
+  try {
+    const { error } = await supabase
+      .from('messages')
+      .update({ read: true })
+      .eq('id', messageId);
+    
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Erro ao marcar mensagem como lida:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// ============================================================
 // SERVIÇO DE INSPEÇÕES
 // ============================================================
 
@@ -420,42 +544,5 @@ export const getInspectionsFromSupabase = async (filters = {}) => {
   } catch (error) {
     console.error('Erro ao buscar inspeções:', error);
     return { success: false, error: error.message, inspections: [] };
-  }
-};
-
-// ============================================================
-// SERVIÇO DE USUÁRIOS
-// ============================================================
-
-// Listar todos os usuários
-export const listUsers = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .order('name');
-    
-    if (error) throw error;
-    return { success: true, users: data };
-  } catch (error) {
-    console.error('Erro ao listar usuários:', error);
-    return { success: false, error: error.message, users: [] };
-  }
-};
-
-// Buscar usuário por ID
-export const getUserById = async (userId) => {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    
-    if (error) throw error;
-    return { success: true, user: data };
-  } catch (error) {
-    console.error('Erro ao buscar usuário:', error);
-    return { success: false, error: error.message, user: null };
   }
 };
