@@ -5,7 +5,7 @@ import { Icon } from "../lib/icons";
 import ScoreRing from "../components/ScoreRing";
 import StatusBadge from "../components/StatusBadge";
 import { photoStore } from "../lib/photoStore";
-import { getClientTemplate, ROLES } from "../data/constants"; // ← ADD ROLES HERE
+import { getClientTemplate, ROLES } from "../data/constants";
 import { scoreLabel, getCategoryHealth, generateAISummary } from "../lib/helpers";
 
 export default function InspectionDetail({ inspection, currentUser, onBack, onUpdate, addAuditLog, allInspections }) {
@@ -18,10 +18,8 @@ export default function InspectionDetail({ inspection, currentUser, onBack, onUp
   const [qcText, setQcText] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Verificar se o usuário pode revisar (ADMIN ou SUPERVISOR)
   const canReview = currentUser && [ROLES.ADMIN, ROLES.SUPERVISOR].includes(currentUser.role);
 
-  // Obter template do cliente para nomes das seções
   const template = getClientTemplate(inspection.location_name);
   const TEMPLATE_SECTIONS = template.sections || [];
 
@@ -40,7 +38,6 @@ export default function InspectionDetail({ inspection, currentUser, onBack, onUp
     loadPhotos();
   }, [inspection.id]);
 
-  // Calcular estatísticas
   const totalItems = inspection.items?.length || 0;
   const scoredItems = inspection.items?.filter(i => i.score !== null) || [];
   const completedItems = scoredItems.length;
@@ -52,7 +49,6 @@ export default function InspectionDetail({ inspection, currentUser, onBack, onUp
   const okItems = scoredItems.filter(i => i.score >= 4);
   const mediumItems = scoredItems.filter(i => i.score === 3);
 
-  // Calcular scores por categoria
   const sectionScores = TEMPLATE_SECTIONS.map(s => {
     const sItems = inspection.items?.filter(i => i.section_id === s.id && i.score !== null) || [];
     const avg = sItems.length ? Math.round((sItems.reduce((sum, i) => sum + Number(i.score), 0) / (sItems.length * 5)) * 100) : null;
@@ -60,25 +56,49 @@ export default function InspectionDetail({ inspection, currentUser, onBack, onUp
     return { ...s, avg, count: sItems.length, health };
   });
 
-  // Heatmap de defeitos recorrentes
+  // ============================================================
+  // HEATMAP CORRIGIDO - Agrupa defeitos recorrentes
+  // ============================================================
   const defectHeatmap = (() => {
-    if (!allInspections) return [];
-    const clientInsps = allInspections.filter(i => i.location_id === inspection.location_id && i.score_pct !== null);
+    if (!allInspections || !allInspections.length) return [];
+    
+    const clientInsps = allInspections.filter(i => 
+      i.location_id === inspection.location_id && 
+      i.score_pct !== null &&
+      i.id !== inspection.id
+    );
+    
+    if (clientInsps.length === 0) return [];
+    
     const defectMap = {};
     clientInsps.forEach(insp => {
       (insp.items || []).forEach(item => {
         if (item.score !== null && item.score <= 2) {
-          const key = item.label || item.text;
-          if (!defectMap[key]) defectMap[key] = { count: 0, section: item.section_id };
+          const key = item.label || item.text || 'Item sem nome';
+          if (!defectMap[key]) {
+            defectMap[key] = { 
+              count: 0, 
+              section: item.section_id,
+              lastScore: item.score,
+              comments: []
+            };
+          }
           defectMap[key].count++;
+          if (item.comment) defectMap[key].comments.push(item.comment);
         }
       });
     });
-    return Object.keys(defectMap).map(key => ({ 
-      text: key, 
-      count: defectMap[key].count, 
-      section: defectMap[key].section 
-    })).sort((a, b) => b.count - a.count).slice(0, 5);
+    
+    return Object.keys(defectMap)
+      .map(key => ({
+        text: key,
+        count: defectMap[key].count,
+        section: defectMap[key].section,
+        lastScore: defectMap[key].lastScore,
+        comments: defectMap[key].comments.slice(0, 3)
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
   })();
 
   const handleApprove = () => { 
@@ -103,13 +123,12 @@ export default function InspectionDetail({ inspection, currentUser, onBack, onUp
     setQcItem(null);
   };
 
-  // Funções de exportação (PDF e Word)
+  // Funções de exportação (PDF e Word) - mantidas iguais
   const handleDownloadPDF = async () => {
     try {
       const doc = new jsPDF();
       const ai = generateAISummary(inspection.items, inspection.location_name);
       
-      // Header
       doc.setFillColor(30, 42, 58); 
       doc.rect(0, 0, 210, 30, 'F');
       doc.setTextColor(255, 255, 255); 
@@ -120,7 +139,6 @@ export default function InspectionDetail({ inspection, currentUser, onBack, onUp
       doc.setFont("helvetica", "normal");
       doc.text("NEMCHEM - Field Inspection Management System", 105, 22, { align: "center" });
 
-      // Info Box
       doc.setFillColor(248, 247, 244); 
       doc.roundedRect(14, 35, 182, 30, 3, 3, 'F');
       doc.setTextColor(50, 50, 50); 
@@ -155,7 +173,6 @@ export default function InspectionDetail({ inspection, currentUser, onBack, onUp
       }
       y += 6;
 
-      // Sections with Photos
       for (const section of TEMPLATE_SECTIONS) {
         if (y > 250) { doc.addPage(); y = 20; }
         doc.setFillColor(30, 42, 58); 
@@ -198,7 +215,6 @@ export default function InspectionDetail({ inspection, currentUser, onBack, onUp
         y += 6;
       }
 
-      // Signatures
       if (y > 250) { doc.addPage(); y = 20; }
       if (inspection.inspector_sig) { 
         try { 
@@ -272,7 +288,6 @@ export default function InspectionDetail({ inspection, currentUser, onBack, onUp
         });
       });
 
-      // Signatures
       html += `<div style="margin-top: 40px; display: flex; justify-content: space-between;">`;
       if (inspection.inspector_sig) html += `<div><img src="${inspection.inspector_sig}" style="width: 150px; height: 50px;" /><br/><strong>Inspector Signature</strong></div>`;
       if (inspection.client_sig) html += `<div><img src="${inspection.client_sig}" style="width: 150px; height: 50px;" /><br/><strong>Client Signature</strong></div>`;
@@ -295,7 +310,6 @@ export default function InspectionDetail({ inspection, currentUser, onBack, onUp
     }
   };
 
-  // Se não houver dados, mostrar loading
   if (!inspection) {
     return (
       <div className="card" style={{ textAlign: "center", padding: 40 }}>
@@ -509,7 +523,7 @@ export default function InspectionDetail({ inspection, currentUser, onBack, onUp
         </div>
       )}
 
-      {/* Tab: Detalhes - continua igual */}
+      {/* Tab: Detalhes */}
       {activeTab === "detalhes" && (
         <div>
           {TEMPLATE_SECTIONS.length > 0 ? (
@@ -693,54 +707,88 @@ export default function InspectionDetail({ inspection, currentUser, onBack, onUp
         </div>
       )}
 
-      {/* Tab: Heatmap */}
+      {/* Tab: Heatmap - CORRIGIDO */}
       {activeTab === "heatmap" && (
         <div className="card">
           <h3 style={{ fontSize: 15, marginBottom: 12, color: "#1E2A3A" }}>🔥 Defeitos Recorrentes</h3>
           <p style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
             Itens que frequentemente recebem score 1 ou 2 neste cliente. Indicam problemas sistémicos que requerem atenção.
           </p>
+          
           {defectHeatmap.length === 0 ? (
             <div style={{ textAlign: "center", padding: 30, color: "#888" }}>
               <Icon name="check" size={32} style={{ color: "#0F6E56", marginBottom: 12 }} />
               <p>Nenhum defeito recorrente encontrado para este cliente.</p>
+              <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>
+                {allInspections?.filter(i => i.location_id === inspection.location_id && i.id !== inspection.id).length === 0 
+                  ? "Não há inspeções anteriores para este cliente." 
+                  : "Todas as inspeções anteriores tiveram scores acima de 2."}
+              </p>
             </div>
           ) : (
-            defectHeatmap.map((defect, i) => {
-              const severity = defect.count > 3 ? "Crítico" : defect.count > 1 ? "Alto" : "Médio";
-              const color = defect.count > 3 ? "#A32D2D" : defect.count > 1 ? "#EF9F27" : "#FAC775";
-              const pct = Math.min(defect.count * 20, 100);
-              
-              return (
-                <div key={i} style={{ 
-                  display: "flex", 
-                  justifyContent: "space-between", 
-                  alignItems: "center", 
-                  padding: "10px 0", 
-                  borderBottom: "1px solid #eee",
-                  flexWrap: "wrap",
-                  gap: 8
-                }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, flex: 1, minWidth: 150 }}>
-                    {defect.text}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color }}>
-                      {defect.count}x
-                    </span>
-                    <span style={{ fontSize: 11, color: "#888" }}>{severity}</span>
-                    <div style={{ width: 80, height: 6, background: "#eee", borderRadius: 3, overflow: "hidden" }}>
-                      <div style={{ 
-                        width: `${pct}%`, 
-                        height: "100%", 
+            <>
+              {defectHeatmap.map((defect, i) => {
+                const severity = defect.count > 3 ? "Crítico" : defect.count > 1 ? "Alto" : "Médio";
+                const color = defect.count > 3 ? "#A32D2D" : defect.count > 1 ? "#EF9F27" : "#FAC775";
+                const pct = Math.min(defect.count * 20, 100);
+                
+                return (
+                  <div key={i} style={{ 
+                    display: "flex", 
+                    justifyContent: "space-between", 
+                    alignItems: "center", 
+                    padding: "10px 0", 
+                    borderBottom: "1px solid #eee",
+                    flexWrap: "wrap",
+                    gap: 8
+                  }}>
+                    <div style={{ flex: 1, minWidth: 150 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500 }}>
+                        {defect.text}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>
+                        Último score: {defect.lastScore}/5
+                        {defect.comments.length > 0 && ` • Obs: ${defect.comments[0]}`}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color }}>
+                        {defect.count}x
+                      </span>
+                      <span style={{ 
+                        fontSize: 11, 
+                        padding: "2px 10px", 
+                        borderRadius: 12,
                         background: color,
-                        transition: "width 0.5s ease"
-                      }} />
+                        color: "white",
+                        fontWeight: 500
+                      }}>
+                        {severity}
+                      </span>
+                      <div style={{ width: 80, height: 6, background: "#eee", borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{ 
+                          width: `${pct}%`, 
+                          height: "100%", 
+                          background: color,
+                          transition: "width 0.5s ease"
+                        }} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
+                );
+              })}
+              
+              <div style={{ 
+                marginTop: 16, 
+                padding: 12, 
+                background: "#F8F7F4", 
+                borderRadius: 6,
+                fontSize: 12,
+                color: "#666"
+              }}>
+                💡 Baseado em {allInspections?.filter(i => i.location_id === inspection.location_id && i.id !== inspection.id).length || 0} inspeções anteriores
+              </div>
+            </>
           )}
           
           <div style={{ marginTop: 16, display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
