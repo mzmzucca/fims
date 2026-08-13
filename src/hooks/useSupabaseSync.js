@@ -8,8 +8,13 @@ import {
   deletePhotosByInspection,
   saveInspectionToSupabase,
   getInspectionsFromSupabase,
-  ensureBucket
+  sendNotification,
+  getNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  countUnreadNotifications
 } from '../lib/supabaseService';
+import { ensureBucket } from '../lib/supabaseClient';
 import { saveTemplatesToStorage } from '../utils/excelTemplateImporter';
 
 export function useSupabaseSync() {
@@ -172,6 +177,65 @@ export function useSupabaseSync() {
     }
   };
 
+  // ============================================================
+  // FUNÇÕES DE NOTIFICAÇÃO
+  // ============================================================
+
+  // Enviar notificação
+  const sendNotificationToUser = async (userId, title, message, type = 'info', link = null) => {
+    try {
+      const result = await sendNotification(userId, title, message, type, link);
+      return result;
+    } catch (error) {
+      console.error('Erro ao enviar notificação:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Buscar notificações
+  const fetchNotifications = async (userId, limit = 20) => {
+    try {
+      const result = await getNotifications(userId, limit);
+      return result;
+    } catch (error) {
+      console.error('Erro ao buscar notificações:', error);
+      return { success: false, error: error.message, notifications: [] };
+    }
+  };
+
+  // Marcar notificação como lida
+  const markAsRead = async (notificationId) => {
+    try {
+      const result = await markNotificationAsRead(notificationId);
+      return result;
+    } catch (error) {
+      console.error('Erro ao marcar notificação como lida:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Marcar todas como lidas
+  const markAllAsRead = async (userId) => {
+    try {
+      const result = await markAllNotificationsAsRead(userId);
+      return result;
+    } catch (error) {
+      console.error('Erro ao marcar todas como lidas:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Contar notificações não lidas
+  const countUnread = async (userId) => {
+    try {
+      const result = await countUnreadNotifications(userId);
+      return result;
+    } catch (error) {
+      console.error('Erro ao contar notificações:', error);
+      return { success: false, error: error.message, count: 0 };
+    }
+  };
+
   return {
     syncing,
     syncProgress,
@@ -183,6 +247,11 @@ export function useSupabaseSync() {
     uploadInspectionPhotos,
     fetchInspectionPhotos,
     deleteInspectionPhotos,
-    saveInspection
+    saveInspection,
+    sendNotificationToUser,
+    fetchNotifications,
+    markAsRead,
+    markAllAsRead,
+    countUnread
   };
 }
