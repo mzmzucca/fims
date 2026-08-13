@@ -1,19 +1,14 @@
 // /src/components/NotificationBell.jsx
 import { useState, useEffect } from 'react';
 import { Icon } from '../lib/icons';
-import { 
-  getNotifications, 
-  countUnreadNotifications,
-  markNotificationAsRead,
-  markAllNotificationsAsRead,
-  subscribeToNotifications
-} from '../lib/notificationService';
+import { useSupabaseSync } from '../hooks/useSupabaseSync';
 
 export default function NotificationBell({ userId }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { fetchNotifications, markAsRead, markAllAsRead, countUnread } = useSupabaseSync();
 
   const loadNotifications = async () => {
     if (!userId) return;
@@ -21,8 +16,8 @@ export default function NotificationBell({ userId }) {
     setLoading(true);
     try {
       const [notifsResult, countResult] = await Promise.all([
-        getNotifications(userId, 20),
-        countUnreadNotifications(userId)
+        fetchNotifications(userId, 20),
+        countUnread(userId)
       ]);
       
       if (notifsResult.success) {
@@ -41,29 +36,22 @@ export default function NotificationBell({ userId }) {
   useEffect(() => {
     loadNotifications();
     
-    // Inscrever para notificações em tempo real
-    if (userId) {
-      const channel = subscribeToNotifications(userId, (newNotification) => {
-        setNotifications(prev => [newNotification, ...prev]);
-        setUnreadCount(prev => prev + 1);
-        
-        // Mostrar notificação do navegador
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification(newNotification.title, {
-            body: newNotification.message,
-            icon: '/favicon.svg'
-          });
-        }
-      });
-      
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
+    // Polling para notificações em tempo real
+    const interval = setInterval(() => {
+      if (userId) {
+        countUnread(userId).then(result => {
+          if (result.success && result.count !== unreadCount) {
+            loadNotifications();
+          }
+        });
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, [userId]);
 
   const handleMarkAsRead = async (notificationId) => {
-    const result = await markNotificationAsRead(notificationId);
+    const result = await markAsRead(notificationId);
     if (result.success) {
       setNotifications(prev => 
         prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
@@ -73,7 +61,7 @@ export default function NotificationBell({ userId }) {
   };
 
   const handleMarkAllAsRead = async () => {
-    const result = await markAllNotificationsAsRead(userId);
+    const result = await markAllAsRead(userId);
     if (result.success) {
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       setUnreadCount(0);
@@ -118,8 +106,8 @@ export default function NotificationBell({ userId }) {
             fontSize: 10,
             fontWeight: 'bold',
             borderRadius: '50%',
-            width: 18,
-            height: 18,
+            width: 20,
+            height: 20,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
