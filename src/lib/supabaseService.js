@@ -1,5 +1,5 @@
 // /src/lib/supabaseService.js
-import { supabase, PHOTOS_BUCKET } from './supabaseClient';
+import { supabase, PHOTOS_BUCKET, ensureBucket } from './supabaseClient';
 
 // ============================================================
 // SERVIÇO DE TEMPLATES
@@ -258,6 +258,102 @@ export const deletePhotosByInspection = async (inspectionId) => {
 };
 
 // ============================================================
+// SERVIÇO DE NOTIFICAÇÕES
+// ============================================================
+
+// Enviar notificação
+export const sendNotification = async (userId, title, message, type = 'info', link = null) => {
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert({
+        user_id: userId,
+        title,
+        message,
+        type,
+        link,
+        read: false
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return { success: true, notification: data };
+  } catch (error) {
+    console.error('Erro ao enviar notificação:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Buscar notificações do usuário
+export const getNotifications = async (userId, limit = 20) => {
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    
+    if (error) throw error;
+    return { success: true, notifications: data };
+  } catch (error) {
+    console.error('Erro ao buscar notificações:', error);
+    return { success: false, error: error.message, notifications: [] };
+  }
+};
+
+// Marcar notificação como lida
+export const markNotificationAsRead = async (notificationId) => {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('id', notificationId);
+    
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Erro ao marcar notificação como lida:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Marcar todas como lidas
+export const markAllNotificationsAsRead = async (userId) => {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', userId)
+      .eq('read', false);
+    
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Erro ao marcar todas notificações como lidas:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Contar notificações não lidas
+export const countUnreadNotifications = async (userId) => {
+  try {
+    const { count, error } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('read', false);
+    
+    if (error) throw error;
+    return { success: true, count };
+  } catch (error) {
+    console.error('Erro ao contar notificações:', error);
+    return { success: false, error: error.message, count: 0 };
+  }
+};
+
+// ============================================================
 // SERVIÇO DE INSPEÇÕES
 // ============================================================
 
@@ -328,83 +424,38 @@ export const getInspectionsFromSupabase = async (filters = {}) => {
 };
 
 // ============================================================
-// FUNÇÃO PARA CRIAR AS TABELAS (executar uma vez no SQL Editor)
+// SERVIÇO DE USUÁRIOS
 // ============================================================
 
-export const createTablesSQL = `
--- Tabela templates
-CREATE TABLE IF NOT EXISTS templates (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  client_id TEXT NOT NULL UNIQUE,
-  client_name TEXT NOT NULL,
-  sections JSONB NOT NULL,
-  total_items INTEGER DEFAULT 0,
-  version TEXT DEFAULT '1.0',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+// Listar todos os usuários
+export const listUsers = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('name');
+    
+    if (error) throw error;
+    return { success: true, users: data };
+  } catch (error) {
+    console.error('Erro ao listar usuários:', error);
+    return { success: false, error: error.message, users: [] };
+  }
+};
 
-CREATE INDEX IF NOT EXISTS idx_templates_client_id ON templates(client_id);
-CREATE INDEX IF NOT EXISTS idx_templates_client_name ON templates(client_name);
-
--- Tabela photos
-CREATE TABLE IF NOT EXISTS photos (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  inspection_id TEXT NOT NULL,
-  item_id TEXT NOT NULL,
-  file_name TEXT NOT NULL,
-  file_size INTEGER,
-  mime_type TEXT,
-  storage_path TEXT NOT NULL,
-  public_url TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_photos_inspection_id ON photos(inspection_id);
-CREATE INDEX IF NOT EXISTS idx_photos_item_id ON photos(item_id);
-
--- Tabela inspections_sync
-CREATE TABLE IF NOT EXISTS inspections_sync (
-  id TEXT PRIMARY KEY,
-  location_id INTEGER,
-  location_name TEXT,
-  inspector_id INTEGER,
-  inspector_name TEXT,
-  supervisor_id INTEGER,
-  supervisor_name TEXT,
-  status TEXT,
-  score_pct INTEGER,
-  date DATE,
-  items JSONB,
-  sections JSONB,
-  notes TEXT,
-  alert_level TEXT,
-  template_id TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_inspections_sync_location ON inspections_sync(location_id);
-CREATE INDEX IF NOT EXISTS idx_inspections_sync_date ON inspections_sync(date);
-
--- Trigger para updated_at
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS update_templates_updated_at ON templates;
-CREATE TRIGGER update_templates_updated_at
-BEFORE UPDATE ON templates
-FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_inspections_sync_updated_at ON inspections_sync;
-CREATE TRIGGER update_inspections_sync_updated_at
-BEFORE UPDATE ON inspections_sync
-FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
-`;
+// Buscar usuário por ID
+export const getUserById = async (userId) => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    
+    if (error) throw error;
+    return { success: true, user: data };
+  } catch (error) {
+    console.error('Erro ao buscar usuário:', error);
+    return { success: false, error: error.message, user: null };
+  }
+};
