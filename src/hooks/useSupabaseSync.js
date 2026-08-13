@@ -12,7 +12,13 @@ import {
   getNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
-  countUnreadNotifications
+  countUnreadNotifications,
+  sendMessage,
+  getMessages,
+  markMessageAsRead,
+  listUsers,
+  updateUser,
+  resetPassword
 } from '../lib/supabaseService';
 import { ensureBucket } from '../lib/supabaseClient';
 import { saveTemplatesToStorage } from '../utils/excelTemplateImporter';
@@ -181,7 +187,6 @@ export function useSupabaseSync() {
   // FUNÇÕES DE NOTIFICAÇÃO
   // ============================================================
 
-  // Enviar notificação
   const sendNotificationToUser = async (userId, title, message, type = 'info', link = null) => {
     try {
       const result = await sendNotification(userId, title, message, type, link);
@@ -192,7 +197,6 @@ export function useSupabaseSync() {
     }
   };
 
-  // Buscar notificações
   const fetchNotifications = async (userId, limit = 20) => {
     try {
       const result = await getNotifications(userId, limit);
@@ -203,7 +207,6 @@ export function useSupabaseSync() {
     }
   };
 
-  // Marcar notificação como lida
   const markAsRead = async (notificationId) => {
     try {
       const result = await markNotificationAsRead(notificationId);
@@ -214,7 +217,6 @@ export function useSupabaseSync() {
     }
   };
 
-  // Marcar todas como lidas
   const markAllAsRead = async (userId) => {
     try {
       const result = await markAllNotificationsAsRead(userId);
@@ -225,7 +227,6 @@ export function useSupabaseSync() {
     }
   };
 
-  // Contar notificações não lidas
   const countUnread = async (userId) => {
     try {
       const result = await countUnreadNotifications(userId);
@@ -233,6 +234,74 @@ export function useSupabaseSync() {
     } catch (error) {
       console.error('Erro ao contar notificações:', error);
       return { success: false, error: error.message, count: 0 };
+    }
+  };
+
+  // ============================================================
+  // FUNÇÕES DE MENSAGENS
+  // ============================================================
+
+  const sendMessageToUser = async (senderId, receiverId, message) => {
+    try {
+      const result = await sendMessage(senderId, receiverId, message);
+      return result;
+    } catch (error) {
+      console.error('Erro ao enviar mensagem:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const fetchMessages = async (userId1, userId2) => {
+    try {
+      const result = await getMessages(userId1, userId2);
+      return result;
+    } catch (error) {
+      console.error('Erro ao buscar mensagens:', error);
+      return { success: false, error: error.message, messages: [] };
+    }
+  };
+
+  const markMessageRead = async (messageId) => {
+    try {
+      const result = await markMessageAsRead(messageId);
+      return result;
+    } catch (error) {
+      console.error('Erro ao marcar mensagem como lida:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // ============================================================
+  // FUNÇÕES DE USUÁRIOS
+  // ============================================================
+
+  const fetchUsers = async () => {
+    try {
+      const result = await listUsers();
+      return result;
+    } catch (error) {
+      console.error('Erro ao buscar usuários:', error);
+      return { success: false, error: error.message, users: [] };
+    }
+  };
+
+  const updateUserProfile = async (userId, updates) => {
+    try {
+      const result = await updateUser(userId, updates);
+      return result;
+    } catch (error) {
+      console.error('Erro ao atualizar usuário:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const resetUserPassword = async (email) => {
+    try {
+      const result = await resetPassword(email);
+      return result;
+    } catch (error) {
+      console.error('Erro ao resetar senha:', error);
+      return { success: false, error: error.message };
     }
   };
 
@@ -252,6 +321,12 @@ export function useSupabaseSync() {
     fetchNotifications,
     markAsRead,
     markAllAsRead,
-    countUnread
+    countUnread,
+    sendMessageToUser,
+    fetchMessages,
+    markMessageRead,
+    fetchUsers,
+    updateUserProfile,
+    resetUserPassword
   };
 }
