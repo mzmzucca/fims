@@ -15,10 +15,7 @@ import {
   countUnreadNotifications,
   sendMessage,
   getMessages,
-  markMessageAsRead,
-  listUsers,
-  updateUser,
-  resetPassword
+  markMessageAsRead
 } from '../lib/supabaseService';
 import { ensureBucket } from '../lib/supabaseClient';
 import { saveTemplatesToStorage } from '../utils/excelTemplateImporter';
@@ -29,7 +26,6 @@ export function useSupabaseSync() {
   const [syncError, setSyncError] = useState(null);
   const [syncStatus, setSyncStatus] = useState('');
 
-  // Inicializar bucket
   const initializeBucket = async () => {
     setSyncing(true);
     setSyncStatus('Inicializando storage...');
@@ -51,7 +47,6 @@ export function useSupabaseSync() {
     }
   };
 
-  // Sincronizar templates do Supabase para o localStorage
   const syncTemplatesFromSupabase = async () => {
     setSyncing(true);
     setSyncProgress(0);
@@ -85,7 +80,6 @@ export function useSupabaseSync() {
     }
   };
 
-  // Sincronizar templates locais para o Supabase
   const syncTemplatesToSupabase = async () => {
     setSyncing(true);
     setSyncProgress(0);
@@ -119,7 +113,6 @@ export function useSupabaseSync() {
     }
   };
 
-  // Upload de fotos para o Supabase
   const uploadInspectionPhotos = async (inspectionId, itemId, file) => {
     try {
       setSyncStatus('Fazendo upload da foto...');
@@ -137,7 +130,6 @@ export function useSupabaseSync() {
     }
   };
 
-  // Buscar fotos do Supabase
   const fetchInspectionPhotos = async (inspectionId) => {
     try {
       setSyncStatus('Buscando fotos...');
@@ -153,7 +145,6 @@ export function useSupabaseSync() {
     }
   };
 
-  // Deletar fotos de uma inspeção
   const deleteInspectionPhotos = async (inspectionId) => {
     try {
       setSyncStatus('Removendo fotos...');
@@ -168,7 +159,6 @@ export function useSupabaseSync() {
     }
   };
 
-  // Salvar inspeção no Supabase
   const saveInspection = async (inspection) => {
     try {
       setSyncStatus('Salvando inspeção...');
@@ -184,7 +174,7 @@ export function useSupabaseSync() {
   };
 
   // ============================================================
-  // FUNÇÕES DE NOTIFICAÇÃO
+  // NOTIFICAÇÕES
   // ============================================================
 
   const sendNotificationToUser = async (userId, title, message, type = 'info', link = null) => {
@@ -238,7 +228,7 @@ export function useSupabaseSync() {
   };
 
   // ============================================================
-  // FUNÇÕES DE MENSAGENS
+  // MENSAGENS
   // ============================================================
 
   const sendMessageToUser = async (senderId, receiverId, message) => {
@@ -271,40 +261,6 @@ export function useSupabaseSync() {
     }
   };
 
-  // ============================================================
-  // FUNÇÕES DE USUÁRIOS
-  // ============================================================
-
-  const fetchUsers = async () => {
-    try {
-      const result = await listUsers();
-      return result;
-    } catch (error) {
-      console.error('Erro ao buscar usuários:', error);
-      return { success: false, error: error.message, users: [] };
-    }
-  };
-
-  const updateUserProfile = async (userId, updates) => {
-    try {
-      const result = await updateUser(userId, updates);
-      return result;
-    } catch (error) {
-      console.error('Erro ao atualizar usuário:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  const resetUserPassword = async (email) => {
-    try {
-      const result = await resetPassword(email);
-      return result;
-    } catch (error) {
-      console.error('Erro ao resetar senha:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
   return {
     syncing,
     syncProgress,
@@ -324,9 +280,6 @@ export function useSupabaseSync() {
     countUnread,
     sendMessageToUser,
     fetchMessages,
-    markMessageRead,
-    fetchUsers,
-    updateUserProfile,
-    resetUserPassword
+    markMessageRead
   };
 }
