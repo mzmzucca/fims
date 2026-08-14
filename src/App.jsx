@@ -24,8 +24,8 @@ import { genSeedInspections, genId } from "./lib/helpers";
 import { exportToICS } from "./lib/icsExporter";
 import { LangProvider } from "./context/LangContext";
 import { CommsProvider, useComms } from "./context/CommsContext";
-import { getTemplateByClientName } from "./utils/excelTemplateImporter";
 import { photoStore } from "./lib/photoStore";
+import { getCurrentUser, signOut, listUsers } from "./lib/supabaseClient";
 
 function NewInspectionModal({ locations, users, currentUser, onClose, onCreate }) {
   const [locId, setLocId] = useState("");
@@ -150,10 +150,8 @@ function NewInspectionModal({ locations, users, currentUser, onClose, onCreate }
 
 function AppContent() {
   const { notify } = useComms();
-  const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem("fims_current_user");
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [inspections, setInspections] = useState(() => {
     const saved = localStorage.getItem("fims_inspections");
@@ -180,6 +178,40 @@ function AppContent() {
   const [reschedulingTask, setReschedulingTask] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // ============================================================
+  // PERSISTIR SESSÃO - Carregar usuário ao iniciar
+  // ============================================================
+  useEffect(() => {
+    const loadUser = async () => {
+      setLoading(true);
+      try {
+        // Verificar se há usuário no localStorage
+        const savedUser = localStorage.getItem("fims_current_user");
+        if (savedUser) {
+          const parsedUser = JSON.parse(savedUser);
+          // Verificar se o usuário ainda está autenticado no Supabase
+          const result = await getCurrentUser();
+          if (result.success && result.user) {
+            setCurrentUser(result.user);
+            // Atualizar localStorage com dados mais recentes
+            localStorage.setItem("fims_current_user", JSON.stringify(result.user));
+          } else {
+            // Usuário não está mais autenticado
+            localStorage.removeItem("fims_current_user");
+            setCurrentUser(null);
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar usuário:", error);
+        localStorage.removeItem("fims_current_user");
+        setCurrentUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadUser();
+  }, []);
+
   useEffect(() => { localStorage.setItem("fims_inspections", JSON.stringify(inspections)); }, [inspections]);
   useEffect(() => { localStorage.setItem("fims_users", JSON.stringify(users)); }, [users]);
   useEffect(() => { localStorage.setItem("fims_locations", JSON.stringify(locations)); }, [locations]);
@@ -197,14 +229,27 @@ function AppContent() {
     setAuditLogs(prev => [{ id: genId(), timestamp: new Date().toISOString(), user: user.name, action, type, detail }, ...prev]);
   };
 
+  // ============================================================
+  // LOGIN COM SUPABASE
+  // ============================================================
   const handleLogin = (user) => { 
     setCurrentUser(user); 
     localStorage.setItem("fims_current_user", JSON.stringify(user)); 
-    addAuditLog(user, "Login", "login", "Entrou no sistema"); 
+    addAuditLog(user, "Login", "login", "Entrou no sistema via Supabase");
+    // Carregar usuários do Supabase
+    listUsers().then(result => {
+      if (result.success) {
+        setUsers(result.users);
+      }
+    });
   };
   
-  const handleLogout = () => { 
+  // ============================================================
+  // LOGOUT COM SUPABASE
+  // ============================================================
+  const handleLogout = async () => { 
     if (currentUser) addAuditLog(currentUser, "Logout", "logout", "Saiu do sistema"); 
+    await signOut();
     localStorage.removeItem("fims_current_user"); 
     setCurrentUser(null); 
     setPage("dashboard"); 
@@ -406,25 +451,14 @@ function AppContent() {
     alert("Folga registada.");
   };
 
-  // ============================================================
-  // FUNÇÃO PARA DELETAR INSPEÇÃO
-  // ============================================================
   const handleDeleteInspection = async (inspectionId) => {
-    // Encontrar a inspeção para log
     const insp = inspections.find(i => i.id === inspectionId);
-    
-    // Remover do estado
     setInspections(prev => prev.filter(i => i.id !== inspectionId));
-    
-    // Remover fotos do IndexedDB
     try {
-      const deletedCount = await photoStore.deleteAllForInspection(inspectionId);
-      console.log(`Fotos deletadas: ${deletedCount}`);
+      await photoStore.deleteAllForInspection(inspectionId);
     } catch (error) {
       console.error("Erro ao deletar fotos:", error);
     }
-    
-    // Registrar no log de auditoria
     addAuditLog(
       currentUser, 
       "Inspeção Eliminada", 
@@ -432,6 +466,35 @@ function AppContent() {
       `Eliminou a inspeção de ${insp?.location_name || "desconhecido"} (${insp?.date || "data desconhecida"}) - Score: ${insp?.score_pct || "N/A"}%`
     );
   };
+
+  // Mostrar loading enquanto verifica sessão
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        height: '100vh',
+        flexDirection: 'column',
+        gap: 16
+      }}>
+        <div style={{ 
+          width: 40, 
+          height: 40, 
+          border: '4px solid #E5E7EB', 
+          borderTopColor: '#1E2A3A', 
+          borderRadius: '50%', 
+          animation: 'spin 0.8s linear infinite' 
+        }} />
+        <p style={{ color: '#888' }}>Carregando sessão...</p>
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   if (!currentUser) return <Login onLogin={handleLogin} />;
 
