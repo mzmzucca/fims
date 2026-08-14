@@ -1,9 +1,8 @@
 // /src/lib/supabaseClient.js
 import { createClient } from '@supabase/supabase-js';
 
-// Use as novas credenciais do seu novo projeto
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://uaspabiqnmcwohluymeb.supabase.co';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_B08e9mtpZ8BCdauYElZlQw_4dgOaszz';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://SEU_NOVO_PROJETO.supabase.co';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'SUA_CHAVE_ANON';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -37,6 +36,7 @@ export const ensureBucket = async () => {
 
 export const signIn = async (email, password) => {
   try {
+    // 1. Autenticar no Supabase Auth
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
@@ -44,14 +44,34 @@ export const signIn = async (email, password) => {
     
     if (error) throw error;
     
+    // 2. Buscar dados do usuário na tabela users
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('email', email)
       .single();
     
+    // 3. Se não encontrar na tabela users, criar
     if (userError) {
-      return { success: false, error: 'Usuário não encontrado na base de dados' };
+      const newUser = {
+        id: data.user.id,
+        name: data.user.user_metadata?.name || email.split('@')[0],
+        email: email,
+        role: data.user.user_metadata?.role || 'inspector',
+        avatar: data.user.user_metadata?.name?.charAt(0)?.toUpperCase() || email.charAt(0).toUpperCase(),
+        active: true
+      };
+      
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert(newUser);
+      
+      if (insertError) {
+        console.error('Erro ao criar usuário na tabela:', insertError);
+        return { success: false, error: 'Erro ao criar perfil do usuário' };
+      }
+      
+      return { success: true, user: newUser };
     }
     
     return { 
@@ -67,6 +87,9 @@ export const signIn = async (email, password) => {
     };
   } catch (error) {
     console.error('Erro ao fazer login:', error);
+    if (error.message.includes('Invalid login credentials')) {
+      return { success: false, error: 'Email ou senha incorretos' };
+    }
     return { success: false, error: error.message };
   }
 };
@@ -95,7 +118,18 @@ export const getCurrentUser = async () => {
       .single();
     
     if (userError) {
-      return { success: true, user: null };
+      // Criar perfil se não existir
+      const newUser = {
+        id: user.id,
+        name: user.user_metadata?.name || user.email.split('@')[0],
+        email: user.email,
+        role: user.user_metadata?.role || 'inspector',
+        avatar: user.user_metadata?.name?.charAt(0)?.toUpperCase() || user.email.charAt(0).toUpperCase(),
+        active: true
+      };
+      
+      await supabase.from('users').insert(newUser);
+      return { success: true, user: newUser };
     }
     
     return { 
