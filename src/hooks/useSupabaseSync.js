@@ -17,7 +17,7 @@ import {
   getMessages,
   markMessageAsRead
 } from '../lib/supabaseService';
-import { ensureBucket } from '../lib/supabaseClient';
+import { ensureBucket, listUsers, updateUser, resetPassword } from '../lib/supabaseClient';
 import { saveTemplatesToStorage } from '../utils/excelTemplateImporter';
 
 export function useSupabaseSync() {
@@ -261,6 +261,40 @@ export function useSupabaseSync() {
     }
   };
 
+  // ============================================================
+  // USUÁRIOS
+  // ============================================================
+
+  const fetchUsers = async () => {
+    try {
+      const result = await listUsers();
+      return result;
+    } catch (error) {
+      console.error('Erro ao buscar usuários:', error);
+      return { success: false, error: error.message, users: [] };
+    }
+  };
+
+  const updateUserProfile = async (userId, updates) => {
+    try {
+      const result = await updateUser(userId, updates);
+      return result;
+    } catch (error) {
+      console.error('Erro ao atualizar usuário:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const resetUserPassword = async (email) => {
+    try {
+      const result = await resetPassword(email);
+      return result;
+    } catch (error) {
+      console.error('Erro ao resetar senha:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
   return {
     syncing,
     syncProgress,
@@ -280,6 +314,9 @@ export function useSupabaseSync() {
     countUnread,
     sendMessageToUser,
     fetchMessages,
-    markMessageRead
+    markMessageRead,
+    fetchUsers,
+    updateUserProfile,
+    resetUserPassword
   };
 }
