@@ -42,7 +42,6 @@ export default function Login({ onLogin }) {
   return (
     <div className="login-page">
       <div className="login-card">
-        {/* Header com Logo */}
         <div style={{ 
           display: "flex", 
           alignItems: "center", 
@@ -67,7 +66,6 @@ export default function Login({ onLogin }) {
           </div>
         </div>
 
-        {/* Mensagem de erro */}
         {error && (
           <div className="alert-bar alert-critical" style={{ marginBottom: 16 }}>
             <Icon name="alert" size={14} />
@@ -75,7 +73,6 @@ export default function Login({ onLogin }) {
           </div>
         )}
 
-        {/* Campos do formulário */}
         <div className="form-group">
           <label className="form-label">Email</label>
           <input 
@@ -103,7 +100,6 @@ export default function Login({ onLogin }) {
           />
         </div>
 
-        {/* Botão de login */}
         <button 
           className="btn btn-primary" 
           style={{ 
@@ -135,7 +131,6 @@ export default function Login({ onLogin }) {
           )}
         </button>
 
-        {/* Usuários demo */}
         <div style={{ 
           marginTop: 24, 
           padding: "14px 16px", 
@@ -167,7 +162,6 @@ export default function Login({ onLogin }) {
           </div>
         </div>
 
-        {/* Versão */}
         <div style={{ 
           marginTop: 16, 
           textAlign: "center", 
