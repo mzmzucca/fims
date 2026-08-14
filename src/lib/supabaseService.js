@@ -341,7 +341,7 @@ export const deletePhotosByInspection = async (inspectionId) => {
 };
 
 // ============================================================
-// SERVIÇO DE INSPEÇÕES (ADICIONADO)
+// SERVIÇO DE INSPEÇÕES
 // ============================================================
 
 export const saveInspectionToSupabase = async (inspection) => {
