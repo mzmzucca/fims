@@ -1,10 +1,16 @@
 // /src/lib/supabaseClient.js
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://uaspabiqnmcwohluymeb.supabase.co';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_B08e9mtpZ8BCdauYElZlQw_4dgOaszz';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://cblsvfzjhehidbyntpkl.supabase.co';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_o35pKaoXVY0pGINev3XhqQ_XoIHA4Or';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
 
 export const PHOTOS_BUCKET = 'inspection-photos';
 
@@ -31,47 +37,72 @@ export const ensureBucket = async () => {
 };
 
 // ============================================================
-// AUTENTICAÇÃO
+// AUTENTICAÇÃO - CORRIGIDA
 // ============================================================
 
 export const signIn = async (email, password) => {
   try {
     // 1. Autenticar no Supabase Auth
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password
     });
     
-    if (error) throw error;
+    if (authError) {
+      console.error('Erro de autenticação:', authError);
+      if (authError.message.includes('Invalid login credentials')) {
+        return { success: false, error: 'Email ou senha incorretos' };
+      }
+      return { success: false, error: authError.message };
+    }
     
-    // 2. Buscar dados do usuário na tabela users
-    const { data: userData, error: userError } = await supabase
+    if (!authData.user) {
+      return { success: false, error: 'Usuário não encontrado' };
+    }
+
+    console.log('✅ Usuário autenticado:', authData.user.email);
+
+    // 2. Buscar ou criar usuário na tabela users
+    let userData;
+    const { data: existingUser, error: fetchError } = await supabase
       .from('users')
       .select('*')
       .eq('email', email)
-      .single();
-    
-    // 3. Se não encontrar na tabela users, criar
-    if (userError) {
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('Erro ao buscar usuário:', fetchError);
+    }
+
+    if (existingUser) {
+      console.log('✅ Usuário encontrado na tabela:', existingUser.email);
+      userData = existingUser;
+    } else {
+      console.log('🔄 Criando usuário na tabela...');
+      
+      // Criar novo usuário na tabela
       const newUser = {
-        id: data.user.id,
-        name: data.user.user_metadata?.name || email.split('@')[0],
+        id: authData.user.id,
+        name: authData.user.user_metadata?.name || email.split('@')[0],
         email: email,
-        role: data.user.user_metadata?.role || 'inspector',
-        avatar: data.user.user_metadata?.name?.charAt(0)?.toUpperCase() || email.charAt(0).toUpperCase(),
+        role: authData.user.user_metadata?.role || 'inspector',
+        avatar: authData.user.user_metadata?.name?.charAt(0)?.toUpperCase() || email.charAt(0).toUpperCase(),
         active: true
       };
-      
-      const { error: insertError } = await supabase
+
+      const { data: insertedUser, error: insertError } = await supabase
         .from('users')
-        .insert(newUser);
-      
+        .insert(newUser)
+        .select()
+        .single();
+
       if (insertError) {
-        console.error('Erro ao criar usuário na tabela:', insertError);
-        return { success: false, error: 'Erro ao criar perfil do usuário' };
+        console.error('❌ Erro ao criar usuário:', insertError);
+        return { success: false, error: 'Erro ao criar perfil do usuário. Por favor, contate o administrador.' };
       }
-      
-      return { success: true, user: newUser };
+
+      console.log('✅ Usuário criado na tabela:', insertedUser.email);
+      userData = insertedUser;
     }
     
     return { 
@@ -86,11 +117,8 @@ export const signIn = async (email, password) => {
       }
     };
   } catch (error) {
-    console.error('Erro ao fazer login:', error);
-    if (error.message.includes('Invalid login credentials')) {
-      return { success: false, error: 'Email ou senha incorretos' };
-    }
-    return { success: false, error: error.message };
+    console.error('❌ Erro no login:', error);
+    return { success: false, error: error.message || 'Erro ao fazer login' };
   }
 };
 
@@ -115,10 +143,10 @@ export const getCurrentUser = async () => {
       .from('users')
       .select('*')
       .eq('email', user.email)
-      .single();
+      .maybeSingle();
     
-    if (userError) {
-      // Criar perfil se não existir
+    if (userError || !userData) {
+      // Se não encontrar, tentar criar
       const newUser = {
         id: user.id,
         name: user.user_metadata?.name || user.email.split('@')[0],
@@ -128,8 +156,28 @@ export const getCurrentUser = async () => {
         active: true
       };
       
-      await supabase.from('users').insert(newUser);
-      return { success: true, user: newUser };
+      const { data: inserted, error: insertError } = await supabase
+        .from('users')
+        .insert(newUser)
+        .select()
+        .single();
+      
+      if (insertError) {
+        console.error('Erro ao criar usuário:', insertError);
+        return { success: true, user: null };
+      }
+      
+      return { 
+        success: true, 
+        user: {
+          id: inserted.id,
+          name: inserted.name,
+          email: inserted.email,
+          role: inserted.role,
+          avatar: inserted.avatar,
+          active: inserted.active
+        }
+      };
     }
     
     return { 
